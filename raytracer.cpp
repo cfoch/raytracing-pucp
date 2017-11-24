@@ -47,6 +47,9 @@ public:
     Vec3<T> operator * (const T &f) const { return Vec3<T>(x * f, y * f, z * f); }
     Vec3<T> operator * (const Vec3<T> &v) const { return Vec3<T>(x * v.x, y * v.y, z * v.z); }
     T dot(const Vec3<T> &v) const { return x * v.x + y * v.y + z * v.z; }
+    Vec3<T> cross(const Vec3<T> &v) const {
+        return Vec3<T>(y * v.z - z * v.y, -x * v.z + z * v.x, x * v.y - y * v.x);
+    }
     Vec3<T> operator - (const Vec3<T> &v) const { return Vec3<T>(x - v.x, y - v.y, z - v.z); }
     Vec3<T> operator + (const Vec3<T> &v) const { return Vec3<T>(x + v.x, y + v.y, z + v.z); }
     Vec3<T>& operator += (const Vec3<T> &v) { x += v.x, y += v.y, z += v.z; return *this; }
@@ -62,6 +65,71 @@ public:
 };
 
 typedef Vec3<float> Vec3f;
+
+#define EPSILON 0.004
+
+class Triangle {
+    std::vector<Vec3f> vertices;
+    Vec3f surfaceColor;
+    Vec3f emissionColor;
+    float transparency;
+    float reflection;
+
+    Triangle(const std::vector<Vec3f> &vertices, const Vec3f &surfaceColor,
+             const Vec3f emissionColor, const float transparency,
+             const float reflection)
+        : vertices(vertices),
+          surfaceColor(surfaceColor),
+          emissionColor(emissionColor),
+          transparency(transparency),
+          reflection(reflection)
+    {
+        // Empty.
+    }
+
+    bool intersect(const Vec3f &rayOrigin, const Vec3f &rayDirection, float &t)
+    {
+        Vec3f p0p1, p1p2, p2p0, normal, intp, p0intp, p1intp, p2intp, c;
+        float d, normal_dot_rayDirection;
+
+        p0p1 = vertices[1] - vertices[0];
+        p1p2 = vertices[2] - vertices[1];
+        p2p0 = vertices[0] - vertices[2];
+        normal = p0p1.cross(p1p2);
+
+        normal_dot_rayDirection = normal.dot(rayDirection);
+
+        if (abs(normal_dot_rayDirection) < M_PI)
+            // Ray and plane are parallels.
+            return false;
+        d = normal.dot(vertices[0]);
+        t = (normal.dot(rayOrigin) + d) / normal_dot_rayDirection;
+        if (t < 0)
+            // The triangle is behind.
+            return false;
+        // The intersection point.
+        intp = rayOrigin + rayDirection * t;
+
+        // Inside-outside test.
+        p0intp = intp - vertices[0];
+        p1intp = intp - vertices[1];
+        p2intp = intp - vertices[2];
+
+        // Test first edge.
+        c = p0p1.cross(p0intp);
+        if (normal.dot(c) < 0)
+            return false;
+        // Test second edge.
+        c = p1p2.cross(p1intp);
+        if (normal.dot(c) < 0)
+            return false;
+        // Test third edge.
+        c = p2p0.cross(p2intp);
+        if (normal.dot(c) < 0)
+            return false;
+        return true;
+    }
+};
 
 class Sphere
 {
