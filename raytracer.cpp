@@ -18,6 +18,7 @@
 #include <vector>
 #include <iostream>
 #include <cassert>
+#include <vector>
 
 #if defined __linux__ || defined __APPLE__
 // "Compiled for Linux
@@ -68,29 +69,50 @@ typedef Vec3<float> Vec3f;
 
 #define EPSILON 0.004
 
-class Triangle {
+class Primitive {
+    public:
+        // surface color and emission (light)
+        Vec3f surfaceColor, emissionColor;
+        // urface transparency and reflectivity
+        float transparency, reflection;
+
+        Primitive(Vec3f surfaceColor, Vec3f emissionColor, float transparency,
+                  float reflection)
+            : surfaceColor(surfaceColor),
+              emissionColor(emissionColor),
+              transparency(transparency),
+              reflection(reflection)
+        {
+        }
+
+        bool intersect(const Vec3f &rayOrigin, const Vec3f &rayDirection,
+                       std::vector<float> &distances)
+        {
+            return false;
+        }
+};
+
+class Triangle : public Primitive {
     std::vector<Vec3f> vertices;
-    Vec3f surfaceColor;
-    Vec3f emissionColor;
-    float transparency;
-    float reflection;
 
     Triangle(const std::vector<Vec3f> &vertices, const Vec3f &surfaceColor,
              const Vec3f emissionColor, const float transparency,
              const float reflection)
-        : vertices(vertices),
-          surfaceColor(surfaceColor),
-          emissionColor(emissionColor),
-          transparency(transparency),
-          reflection(reflection)
+        : Primitive(surfaceColor, emissionColor, transparency, reflection),
+          vertices(vertices)
+
     {
         // Empty.
     }
 
-    bool intersect(const Vec3f &rayOrigin, const Vec3f &rayDirection, float &t)
+    bool intersect(const Vec3f &rayOrigin, const Vec3f &rayDirection,
+                   std::vector<float> &distances)
     {
         Vec3f p0p1, p1p2, p2p0, normal, intp, p0intp, p1intp, p2intp, c;
         float d, normal_dot_rayDirection;
+        float t;
+
+        //distances = new std::vector<float>();
 
         p0p1 = vertices[1] - vertices[0];
         p1p2 = vertices[2] - vertices[1];
@@ -104,6 +126,7 @@ class Triangle {
             return false;
         d = normal.dot(vertices[0]);
         t = (normal.dot(rayOrigin) + d) / normal_dot_rayDirection;
+        distances.push_back(t);
         if (t < 0)
             // The triangle is behind.
             return false;
@@ -131,13 +154,11 @@ class Triangle {
     }
 };
 
-class Sphere
+class Sphere : public Primitive
 {
 public:
     Vec3f center;                           /// position of the sphere
     float radius, radius2;                  /// sphere radius and radius^2
-    Vec3f surfaceColor, emissionColor;      /// surface color and emission (light)
-    float transparency, reflection;         /// surface transparency and reflectivity
     Sphere(
         const Vec3f &c,
         const float &r,
@@ -145,22 +166,26 @@ public:
         const float &refl = 0,
         const float &transp = 0,
         const Vec3f &ec = 0) :
-        center(c), radius(r), radius2(r * r), surfaceColor(sc), emissionColor(ec),
-        transparency(transp), reflection(refl)
+        Primitive(sc, ec, transp, refl),
+        center(c), radius(r), radius2(r * r)
     { /* empty */ }
     //[comment]
     // Compute a ray-sphere intersection using the geometric solution
     //[/comment]
-    bool intersect(const Vec3f &rayorig, const Vec3f &raydir, float &t0, float &t1) const
+    bool intersect(const Vec3f &rayorig, const Vec3f &raydir,
+                   std::vector<float> &distances) const
     {
         Vec3f l = center - rayorig;
+        //distances = new std::vector<float>();
         float tca = l.dot(raydir);
         if (tca < 0) return false;
         float d2 = l.dot(l) - tca * tca;
         if (d2 > radius2) return false;
         float thc = sqrt(radius2 - d2);
-        t0 = tca - thc;
-        t1 = tca + thc;
+        float t0 = tca - thc;
+        float t1 = tca + thc;
+        distances.push_back(t0);
+        distances.push_back(t1);
 
         return true;
     }
@@ -198,7 +223,9 @@ Vec3f trace(
     // find intersection of this ray with the sphere in the scene
     for (unsigned i = 0; i < spheres.size(); ++i) {
         float t0 = INFINITY, t1 = INFINITY;
-        if (spheres[i].intersect(rayorig, raydir, t0, t1)) {
+        std::vector<float> distances;
+        if (spheres[i].intersect(rayorig, raydir, distances)) {
+            float t0 = distances[0], t1 = distances[1];
             if (t0 < 0) t0 = t1;
             if (t0 < tnear) {
                 tnear = t0;
@@ -253,8 +280,8 @@ Vec3f trace(
                 lightDirection.normalize();
                 for (unsigned j = 0; j < spheres.size(); ++j) {
                     if (i != j) {
-                        float t0, t1;
-                        if (spheres[j].intersect(phit + nhit * bias, lightDirection, t0, t1)) {
+                        std::vector<float> distances;
+                        if (spheres[j].intersect(phit + nhit * bias, lightDirection, distances)) {
                             transmission = 0;
                             break;
                         }
